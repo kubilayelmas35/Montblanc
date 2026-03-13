@@ -1,13 +1,13 @@
 {
   "name": "gitasis-bridge",
-  "version": "1.0.0",
-  "description": "Gitasis Canli Ekran → Cloudflare Worker KV bridge",
+  "version": "2.0.0",
+  "description": "Gitasis Canli Ekran → Cloudflare Worker KV bridge (Socket.IO v4)",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "ws": "^8.16.0"
+    "socket.io-client": "^4.7.5"
   },
   "engines": {
     "node": ">=18"
