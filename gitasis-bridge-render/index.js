@@ -20,7 +20,9 @@ function sha256(str) { return createHash('sha256').update(str).digest('hex').toU
 function login() {
   return new Promise((resolve, reject) => {
     const body = 'kullanici_adi=' + encodeURIComponent(GITASIS_USER) + '&kullanici_sifre=' + encodeURIComponent(GITASIS_PASS);
-    const req = https.request({ hostname: GITASIS_HOST, path: '/vt/inc/db.login.php', method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'Mozilla/5.0' } }, res => {
+    const req = https.request({ hostname: GITASIS_HOST, path: '/vt/inc/db.login.php', method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'Mozilla/5.0' }
+    }, res => {
       const cookies = res.headers['set-cookie'] || [];
       if (cookies.length) cookieJar = cookies.map(c => c.split(';')[0]).join('; ');
       if (res.statusCode === 302 && res.headers.location) {
@@ -34,7 +36,7 @@ function login() {
         r2.on('error', reject); r2.end(); return;
       }
       let data = ''; res.on('data', d => data += d);
-      res.on('end', () => { if (cookieJar) { log('Login OK (cookie)'); resolve(cookieJar); } else reject(new Error('Login failed: ' + data.substring(0,200))); });
+      res.on('end', () => { if (cookieJar) { log('Login OK (cookie)'); resolve(cookieJar); } else reject(new Error('Login failed: ' + data.substring(0, 200))); });
     });
     req.on('error', reject); req.write(body); req.end();
   });
@@ -43,7 +45,9 @@ function login() {
 function pushToWorker(payload) {
   const body = JSON.stringify(payload);
   const url = new URL(WORKER_URL);
-  const req = https.request({ hostname: url.hostname, path: url.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, res => { res.resume(); });
+  const req = https.request({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+  }, res => { res.resume(); });
   req.on('error', e => log('Worker error: ' + e.message));
   req.write(body); req.end();
 }
@@ -71,31 +75,49 @@ function connectSocket() {
   connected = false;
   const up = GITASIS_UP || sha256(GITASIS_PASS);
   const uid = GITASIS_UID;
-  const query = 'uid=' + uid + '&un=' + encodeURIComponent(GITASIS_USER) + '&up=' + up + '&os=Windows&os_v=10&tarayici=Chrome&tarayici_v=120.0.0.0&EIO=4&transport=websocket';
+  const query = 'uid=' + uid + '&un=' + encodeURIComponent(GITASIS_USER) + '&up=' + up +
+    '&os=Windows&os_v=10&tarayici=Chrome&tarayici_v=120.0.0.0&EIO=4&transport=websocket';
   const wsUrl = 'wss://' + GITASIS_HOST + ':' + GITASIS_PORT + '/socket.io/?' + query;
   log('WS connecting (uid=' + uid + ')...');
   const ws = new WebSocket(wsUrl, { headers: { Cookie: cookieJar }, rejectUnauthorized: false });
   wsConn = ws;
-  ws.on('open', () => { connected = true; log('WebSocket open! Sending upgrade...'); ws.send('2probe'); pingTimer = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('3'); }, 25000); });
-  ws.on('message', raw => { const msg = raw.toString(); if (msg === '3probe') { ws.send('5'); log('Socket.IO connected!'); return; } handleMessage(msg); });
-  ws.on('close', (code, reason) => { connected = false; clearInterval(pingTimer); log('WS closed: ' + code + ' ' + reason.toString().substring(0,80)); scheduleReconnect(); });
+  ws.on('open', () => {
+    connected = true;
+    log('WebSocket open! EIO4 ready (no probe)');
+    pingTimer = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('3'); }, 25000);
+  });
+  ws.on('message', raw => {
+    const msg = raw.toString();
+    if (msg.startsWith('0')) { log('EIO4 handshake OK!'); return; }
+    handleMessage(msg);
+  });
+  ws.on('close', (code, reason) => {
+    connected = false; clearInterval(pingTimer);
+    log('WS closed: ' + code + ' ' + reason.toString().substring(0, 80));
+    scheduleReconnect();
+  });
   ws.on('error', e => { connected = false; log('WS error: ' + e.message); });
 }
 
 function scheduleReconnect() {
   if (reconnTimer) return;
-  log('Reconnect in ' + (RECONNECT_MS/1000) + 's...');
+  log('Reconnect in ' + (RECONNECT_MS / 1000) + 's...');
   reconnTimer = setTimeout(() => { reconnTimer = null; connectSocket(); }, RECONNECT_MS);
 }
 
 function startHttpServer() {
   const port = process.env.PORT || 3000;
-  http.createServer((_, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ status: 'ok', connected, uptime: Math.floor(process.uptime()), lastUsers })); }).listen(port, () => log('Health on :' + port));
+  http.createServer((_, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', connected, uptime: Math.floor(process.uptime()), lastUsers }));
+  }).listen(port, () => log('Health on :' + port));
 }
 
 async function main() {
-  try { await login(); connectSocket(); setInterval(async () => { log('Session refresh...'); cookieJar = ''; try { await login(); } catch(e) { log('Re-login: ' + e.message); } }, 6 * 60 * 60 * 1000); }
-  catch(e) { log('Startup: ' + e.message); setTimeout(main, 20000); }
+  try {
+    await login(); connectSocket();
+    setInterval(async () => { log('Session refresh...'); cookieJar = ''; try { await login(); } catch(e) { log('Re-login: ' + e.message); } }, 6 * 60 * 60 * 1000);
+  } catch(e) { log('Startup: ' + e.message); setTimeout(main, 20000); }
 }
 
 startHttpServer();
