@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: gitasis-bridge
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: GITASIS_USER
+        sync: false
+      - key: GITASIS_PASS
+        sync: false
